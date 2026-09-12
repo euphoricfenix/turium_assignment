@@ -31,6 +31,44 @@ cd backend && uv run pytest
 
 API docs at http://localhost:8000/docs
 
+### Docker
+
+The whole stack runs from the root compose file, frontend on 5173, backend on
+8000, database on a named volume:
+
+```bash
+docker compose up --build
+```
+
+Each service keeps its Dockerfile beside its own code so the build contexts stay
+small. The backend image puts SQLite on a mounted volume, so a redeploy does not
+wipe saved items, runs as a non-root user, and honours an injected `PORT`. The
+frontend image builds with Vite and serves the static output from nginx.
+
+`VITE_API_BASE_URL` is a build argument rather than a runtime variable, because
+Vite inlines it into the bundle at build time. It has to be an address the
+browser can reach, which is why compose passes `http://localhost:8000` and not
+the `backend` service name.
+
+The backend alone, for a container host:
+
+```bash
+cd backend
+docker build -t knowledge-inbox-backend .
+docker run -p 8000:8000 --env-file .env -v ki-data:/data knowledge-inbox-backend
+```
+
+The image is 1.8 GB, and roughly 430 MB of that is CrewAI's transitive tree:
+pyarrow, lancedb, kubernetes, onnxruntime and chromadb bindings, pulled in for
+agent memory features this app never uses. Dropping CrewAI for a plain fetch
+would cut it by about a quarter.
+
+Deployment split: Vercel serves the frontend build and needs only
+`VITE_API_BASE_URL`. Vercel does not accept Dockerfiles and its functions have an
+ephemeral filesystem, so the backend goes on a host with a persistent disk
+(Railway, Render, Fly) with `DATABASE_PATH` pointed at the volume and
+`CORS_ORIGINS` including the Vercel domain.
+
 ## How it works
 
 ```
