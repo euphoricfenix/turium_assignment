@@ -63,11 +63,39 @@ pyarrow, lancedb, kubernetes, onnxruntime and chromadb bindings, pulled in for
 agent memory features this app never uses. Dropping CrewAI for a plain fetch
 would cut it by about a quarter.
 
-Deployment split: Vercel serves the frontend build and needs only
-`VITE_API_BASE_URL`. Vercel does not accept Dockerfiles and its functions have an
-ephemeral filesystem, so the backend goes on a host with a persistent disk
-(Railway, Render, Fly) with `DATABASE_PATH` pointed at the volume and
-`CORS_ORIGINS` including the Vercel domain.
+### Deploying
+
+Both images run on any container host. On Railway, create two services from this
+one repository and set each service's root directory.
+
+Backend service, root directory `backend`. Attach a volume mounted at `/data`,
+or a redeploy wipes every saved item. Variables:
+
+```
+OPENAI_API_KEY=sk-...
+DATABASE_PATH=/data/knowledge_inbox.db
+CORS_ORIGINS=["https://your-frontend.up.railway.app"]
+```
+
+Frontend service, root directory `frontend`. Variables:
+
+```
+VITE_API_BASE_URL=https://your-backend.up.railway.app
+```
+
+`VITE_API_BASE_URL` must exist before the image is built, since Vite inlines it
+into the bundle, and it must be the public backend URL rather than an internal
+service name because the browser is what calls it. Both images read `PORT` when
+the host assigns one.
+
+Deploy the backend first to learn its URL, then the frontend, then set
+`CORS_ORIGINS` to the frontend's URL and redeploy the backend. Keep the JSON
+brackets on that value or the app will not start.
+
+Vercel is frontend only: it does not build Dockerfiles, its Python functions cap
+well below this dependency tree, and its filesystem is ephemeral, so SQLite would
+reset on every request. To use it anyway, point a Vercel project at the
+`frontend` directory and set `VITE_API_BASE_URL` to a backend hosted elsewhere.
 
 ## How it works
 
