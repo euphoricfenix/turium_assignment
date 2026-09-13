@@ -63,7 +63,25 @@ pyarrow, lancedb, kubernetes, onnxruntime and chromadb bindings, pulled in for
 agent memory features this app never uses. Dropping CrewAI for a plain fetch
 would cut it by about a quarter.
 
-### Deploying
+### Deploying as one service
+
+The root `Dockerfile` builds the frontend and serves it from the API, so there is
+one image, one domain and no CORS. Hosts that look for a Dockerfile at the
+repository root find it with no configuration, which is the simplest thing to
+deploy:
+
+```bash
+docker build -t knowledge-inbox .
+docker run -p 8000:8000 --env-file backend/.env -v inbox:/data knowledge-inbox
+```
+
+Set `OPENAI_API_KEY`, attach a volume at `/data`, and nothing else is required.
+The frontend is built with an empty `VITE_API_BASE_URL`, so it calls its own
+origin with relative paths, and `CORS_ORIGINS` never comes into it. `STATIC_DIR`
+is what switches the static mount on; it is unset in local development, where
+Vite serves the frontend instead.
+
+### Deploying as two services
 
 Both images run on any container host. On Railway, create two services from this
 one repository and set each service's root directory, `backend` for one and

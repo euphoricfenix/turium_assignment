@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     max_markdown_chars: int = 20000
 
     cors_origins: list[str] = ["http://localhost:5173"]
+    # Set when the built frontend ships inside the image; empty in local dev,
+    # where Vite serves it instead.
+    static_dir: str = ""
     log_level: str = "INFO"
 
 

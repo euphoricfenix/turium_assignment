@@ -3,10 +3,12 @@
 import logging
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from openai import AuthenticationError, OpenAIError
 
 from app.config import get_settings
@@ -82,3 +84,9 @@ async def health() -> dict[str, str]:
 
 
 app.include_router(router)
+
+# Mounted last so API routes match first. Present only when the frontend was
+# built into the image, which makes it same origin and CORS irrelevant.
+if settings.static_dir and Path(settings.static_dir).is_dir():
+    app.mount("/", StaticFiles(directory=settings.static_dir, html=True), name="static")
+    logger.info("event=serving_frontend directory=%s", settings.static_dir)
