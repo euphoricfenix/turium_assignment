@@ -33,126 +33,39 @@ API docs at http://localhost:8000/docs
 
 ### Docker
 
-The whole stack runs from the root compose file, frontend on 5173, backend on
-8000, database on a named volume:
+One image, built from the root `Dockerfile`: it compiles the frontend and serves
+it from the API, so there is one port, no CORS and nothing to configure.
 
 ```bash
-docker compose up --build
-```
-
-Each service keeps its Dockerfile beside its own code so the build contexts stay
-small. The backend image puts SQLite on a mounted volume, so a redeploy does not
-wipe saved items, runs as a non-root user, and honours an injected `PORT`. The
-frontend image builds with Vite and serves the static output from nginx.
-
-`VITE_API_BASE_URL` is a build argument rather than a runtime variable, because
-Vite inlines it into the bundle at build time. It has to be an address the
-browser can reach, which is why compose passes `http://localhost:8000` and not
-the `backend` service name.
-
-The backend alone, for a container host:
-
-```bash
-cd backend
-docker build -t knowledge-inbox-backend .
-docker run -p 8000:8000 --env-file .env -v ki-data:/data knowledge-inbox-backend
-```
-
-The image is 1.8 GB, and roughly 430 MB of that is CrewAI's transitive tree:
-pyarrow, lancedb, kubernetes, onnxruntime and chromadb bindings, pulled in for
-agent memory features this app never uses. Dropping CrewAI for a plain fetch
-would cut it by about a quarter.
-
-### Deploying as one service
-
-The root `Dockerfile` builds the frontend and serves it from the API, so there is
-one image, one domain and no CORS. Hosts that look for a Dockerfile at the
-repository root find it with no configuration, which is the simplest thing to
-deploy:
-
-```bash
+cp backend/.env.example backend/.env     # then set OPENAI_API_KEY
 docker build -t knowledge-inbox .
 docker run -p 8000:8000 --env-file backend/.env -v inbox:/data knowledge-inbox
 ```
 
-Set `OPENAI_API_KEY`, attach a volume at `/data`, and nothing else is required.
-The frontend is built with an empty `VITE_API_BASE_URL`, so it calls its own
-origin with relative paths, and `CORS_ORIGINS` never comes into it. `STATIC_DIR`
-is what switches the static mount on; it is unset in local development, where
-Vite serves the frontend instead.
+Open http://localhost:8000
 
-### Deploying as two services
+The named volume keeps SQLite outside the container, so saved items survive a
+restart. The process runs as a non-root user and honours `PORT` if something
+assigns one. The frontend is built with an empty `VITE_API_BASE_URL`, so it calls
+its own origin with relative paths, and `STATIC_DIR` is what switches the static
+mount on. Both are unset in local development, where Vite serves the frontend.
 
-Both images run on any container host. On Railway, create two services from this
-one repository and set each service's root directory, `backend` for one and
-`frontend` for the other.
+The two services can also run separately, each with its own Dockerfile beside its
+code, which is closer to the development layout:
 
-The root directory is not optional. Left unset, Railway's Railpack builder scans
-the repository root, finds two directories and no application, and fails with
-"could not determine how to build the app". Once it is set, Railway finds that
-directory's `railway.json`, which pins the Docker builder and the health check.
-
-Backend service, root directory `backend`. Attach a volume mounted at `/data`,
-or a redeploy wipes every saved item. Variables:
-
-```
-OPENAI_API_KEY=sk-...
-DATABASE_PATH=/data/knowledge_inbox.db
-CORS_ORIGINS=["https://your-frontend.up.railway.app"]
+```bash
+docker compose up --build                # frontend :5173, backend :8000
 ```
 
-Frontend service, root directory `frontend`. Variables:
+There `VITE_API_BASE_URL` is a build argument rather than a runtime variable,
+because Vite inlines it at build time, and it has to be an address the browser
+can reach, which is why compose passes `http://localhost:8000` and not the
+`backend` service name.
 
-```
-VITE_API_BASE_URL=https://your-backend.up.railway.app
-```
-
-`VITE_API_BASE_URL` must exist before the image is built, since Vite inlines it
-into the bundle, and it must be the public backend URL rather than an internal
-service name because the browser is what calls it. Both images read `PORT` when
-the host assigns one.
-
-Deploy the backend first to learn its URL, then the frontend, then set
-`CORS_ORIGINS` to the frontend's URL and redeploy the backend. Keep the JSON
-brackets on that value or the app will not start.
-
-On Render, `render.yaml` declares both services as a blueprint. Render looks for
-a `Dockerfile` at the repository root by default, which does not exist here, so
-each service sets `dockerfilePath` and `dockerContext` explicitly. Create the
-services with New, then Blueprint, and fill in the variables marked `sync: false`.
-
-Render's persistent disks require a paid instance type. On the free tier the
-SQLite file is wiped whenever the service restarts or redeploys, which for a free
-web service includes waking from idle.
-
-Vercel is frontend only: it does not build Dockerfiles, its Python functions cap
-well below this dependency tree, and its filesystem is ephemeral, so SQLite would
-reset on every request. To use it anyway, point a Vercel project at the
-`frontend` directory and set `VITE_API_BASE_URL` to a backend hosted elsewhere.
-
-## How it works
-
-```
-Ingest                                         Query
-------                                         -----
-note text ----------------.                    question (+ history)
-                           \                        |
-URL --> CrewAI crew         \                       v
-        fetch to markdown    >--- markdown --> embed, resolving a
-        DuckDuckGo fallback /         |         follow up against
-                                      v         the last question
-                            split on headings          |
-                            then window 1000/150       v
-                                      |          cosine scan over
-                                      v           all chunk vectors
-                            embed with heading             |
-                            context prepended              v
-                                      |              top k chunks
-                                      v                    |
-                            SQLite items + chunks           v
-                                                      answer with
-                                                      [n] citations
-```
+The image is 1.8 GB, of which roughly 430 MB is CrewAI's transitive tree:
+pyarrow, lancedb, kubernetes, onnxruntime and chromadb bindings, pulled in for
+agent memory features this app never uses. Dropping CrewAI for a plain fetch
+would cut it by about a quarter.
 
 ## API
 

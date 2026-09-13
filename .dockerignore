@@ -1,0 +1,10 @@
+.git
+.claude
+**/.env
+**/.venv
+**/node_modules
+**/dist
+**/__pycache__
+**/.pytest_cache
+backend/data
+*.pdf
