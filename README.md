@@ -66,7 +66,13 @@ would cut it by about a quarter.
 ### Deploying
 
 Both images run on any container host. On Railway, create two services from this
-one repository and set each service's root directory.
+one repository and set each service's root directory, `backend` for one and
+`frontend` for the other.
+
+The root directory is not optional. Left unset, Railway's Railpack builder scans
+the repository root, finds two directories and no application, and fails with
+"could not determine how to build the app". Once it is set, Railway finds that
+directory's `railway.json`, which pins the Docker builder and the health check.
 
 Backend service, root directory `backend`. Attach a volume mounted at `/data`,
 or a redeploy wipes every saved item. Variables:
