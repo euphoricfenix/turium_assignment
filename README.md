@@ -92,6 +92,15 @@ Deploy the backend first to learn its URL, then the frontend, then set
 `CORS_ORIGINS` to the frontend's URL and redeploy the backend. Keep the JSON
 brackets on that value or the app will not start.
 
+On Render, `render.yaml` declares both services as a blueprint. Render looks for
+a `Dockerfile` at the repository root by default, which does not exist here, so
+each service sets `dockerfilePath` and `dockerContext` explicitly. Create the
+services with New, then Blueprint, and fill in the variables marked `sync: false`.
+
+Render's persistent disks require a paid instance type. On the free tier the
+SQLite file is wiped whenever the service restarts or redeploys, which for a free
+web service includes waking from idle.
+
 Vercel is frontend only: it does not build Dockerfiles, its Python functions cap
 well below this dependency tree, and its filesystem is ephemeral, so SQLite would
 reset on every request. To use it anyway, point a Vercel project at the

@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: knowledge-inbox-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /health
+    # A persistent disk needs a paid instance type. Without one the SQLite file
+    # is wiped on every deploy and restart.
+    plan: starter
+    disk:
+      name: inbox-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: DATABASE_PATH
+        value: /data/knowledge_inbox.db
+      # Set to the frontend URL once it exists, JSON array, brackets required.
+      - key: CORS_ORIGINS
+        sync: false
+
+  - type: web
+    name: knowledge-inbox-web
+    runtime: docker
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: ./frontend
+    plan: free
+    envVars:
+      # Vite inlines this at build time, so it must be set before the first
+      # build. Use the public API URL, not an internal hostname.
+      - key: VITE_API_BASE_URL
+        sync: false
